@@ -85,7 +85,7 @@ namespace Football.Collector.Telegram.Services
 
             request.ChatId = newMessage.Chat.Id.ToString();
             request.MessageId = newMessage.MessageId.ToString();
-            request.LastGameId = lastGame.Id;
+            request.LastGameId = lastGame?.Id;
 
             var telegramGame = await apiService.CreateTelegramGameAsync(request);
             if (telegramGame == null)
