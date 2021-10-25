@@ -1,6 +1,6 @@
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System;
 using System.Net.Http;
 using System.Threading;
@@ -11,14 +11,14 @@ namespace Football.Collector.WorkerService
     public class Worker : BackgroundService
     {
         private readonly ILogger<Worker> logger;
-        private readonly IConfiguration configuration;
+        private readonly WorkerOptions options;
 
         public Worker(
-            IConfiguration configuration,
+            IOptions<WorkerOptions> options,
             ILogger<Worker> logger)
         {
             this.logger = logger;
-            this.configuration = configuration;
+            this.options = options.Value;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -29,21 +29,19 @@ namespace Football.Collector.WorkerService
 
                 stoppingToken.Register(() => logger.LogInformation($"Football Collector background task is stopping."));
 
-                if(!double.TryParse(configuration["RecurringIntervalMin"], out var timespanMin))
+                if(options.RecurringIntervalMin == 0)
                 {
                     logger.LogError("RecurringIntervalMin settings not defined");
                     return;
                 }
 
-                var apiUrl = configuration["ApiServiceUrl"];
-                if (string.IsNullOrEmpty(apiUrl))
+                if (string.IsNullOrEmpty(options.ApiServiceUrl))
                 {
                     logger.LogError("ApiServiceUrl settings not defined");
                     return;
                 }
 
-                var webhookUrl = configuration["WebhookUrl"];
-                if (string.IsNullOrEmpty(webhookUrl))
+                if (string.IsNullOrEmpty(options.WebhookUrl))
                 {
                     logger.LogError("WebhookUrl settings not defined");
                     return;
@@ -51,10 +49,10 @@ namespace Football.Collector.WorkerService
 
                 while (!stoppingToken.IsCancellationRequested)
                 {
-                    await PingAsync(new Uri(apiUrl));
-                    await PingAsync(new Uri(webhookUrl));
+                    await PingAsync(new Uri(options.ApiServiceUrl));
+                    await PingAsync(new Uri(options.WebhookUrl));
 
-                    await Task.Delay(TimeSpan.FromMinutes(timespanMin), stoppingToken);
+                    await Task.Delay(TimeSpan.FromMinutes(options.RecurringIntervalMin), stoppingToken);
                 }
 
                 logger.LogInformation($"Football Collector background task is stopping.");
