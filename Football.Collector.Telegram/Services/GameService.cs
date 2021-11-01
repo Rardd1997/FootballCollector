@@ -130,7 +130,7 @@ namespace Football.Collector.Telegram.Services
             if (telegramGame.Date < DateTime.UtcNow)
             {
                 logger.LogWarning($"Telegram game isn't active");
-                return null;
+                return await botClient.SendTextMessageAsync(message.Chat.Id, $"Почекай наступну гру, ця вже відбулась(", replyToMessageId: message.MessageId);
             }
 
             var telegramUser = await apiService.FindTelegramUserAsync(new FindTelegramUserRequest { TelegramId = message.From.Id.ToString() });

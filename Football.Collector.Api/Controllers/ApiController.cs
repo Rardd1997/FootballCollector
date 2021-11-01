@@ -219,6 +219,7 @@ namespace Football.Collector.Api.Controllers
             {
                 var newGamePlayer = new TelegramGamePlayer
                 {
+                    Id = Guid.NewGuid().ToString("D"),
                     TelegramGameId = request.TelegramGameId,
                     TelegramUserId = request.TelegramUserId
                 };
