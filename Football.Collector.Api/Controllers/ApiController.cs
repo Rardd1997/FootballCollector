@@ -177,7 +177,7 @@ namespace Football.Collector.Api.Controllers
         {
             try
             {
-                var lastGame = await gameRepository.FindLastGameAsync(request.Date);
+                var lastGame = await gameRepository.FindLastGameAsync(request.TelegramChatId, request.Date);
                 return Ok(lastGame);
             }
             catch (Exception ex)

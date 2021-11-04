@@ -15,5 +15,6 @@ namespace Football.Collector.Data.Models
         public string MessageId { get; set; }
 
         public virtual ICollection<TelegramGamePlayer> TelegramGamePlayers { get; set; }
+        public virtual ICollection<TelegramGameTeam> TelegramGameTeams { get; set; }
     }
 }

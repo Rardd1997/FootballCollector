@@ -50,9 +50,10 @@ namespace Football.Collector.Api.Repositories
 
             return telegramGame;
         }
-        public async Task<TelegramGame> FindLastGameAsync(DateTime date)
+        public async Task<TelegramGame> FindLastGameAsync(string chatId, DateTime date)
         {
             var lastGames = await context.TelegramGames
+                .Where(x => x.ChatId == chatId)
                 .Include(x => x.TelegramGamePlayers)
                 .ThenInclude(x => x.TelegramUser)
                 .OrderByDescending(x => x.Date)
@@ -65,6 +66,7 @@ namespace Football.Collector.Api.Repositories
             if (lastGame == null)
             {
                 lastGame = await context.TelegramGames
+                    .Where(x => x.ChatId == chatId)
                     .Include(x => x.TelegramGamePlayers)
                     .ThenInclude(x => x.TelegramUser)
                     .OrderByDescending(x => x.Date)

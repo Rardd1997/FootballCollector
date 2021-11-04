@@ -35,6 +35,17 @@ namespace Football.Collector.Data.Context
                 e.HasIndex(x => x.TelegramId);
             });
 
+            builder.Entity<TelegramUserScore>(e =>
+            {
+                e.ToTable("TelegramUserScores").HasKey(x => x.Id);
+
+                e.Property(x => x.Id).HasDefaultValueSql("newid()").IsRequired();
+
+                e.Property(x => x.Score).IsRequired();
+
+                e.HasOne(x => x.TelegramUser).WithOne().HasForeignKey<TelegramUserScore>(x => x.TelegramUserId);
+            });
+
             builder.Entity<TelegramChatUser>(e =>
             {
                 e.ToTable("TelegramChatUsers").HasKey(x => x.Id);
@@ -75,12 +86,29 @@ namespace Football.Collector.Data.Context
                 e.HasOne(x => x.TelegramGame).WithMany(x => x.TelegramGamePlayers).HasForeignKey(x => x.TelegramGameId);
                 e.HasOne(x => x.TelegramUser).WithMany().HasForeignKey(x => x.TelegramUserId);
             });
+
+            builder.Entity<TelegramGameTeam>(e =>
+            {
+                e.ToTable("TelegramGameTeams").HasKey(x => x.Id);
+
+                e.Property(x => x.Id).HasDefaultValueSql("newid()").IsRequired();
+
+                e.Property(x => x.TelegramGameId).IsRequired();
+                e.Property(x => x.TelegramGamePlayerId).IsRequired();
+
+                e.HasIndex(x => new { x.TelegramGameId, x.TelegramGamePlayerId });
+
+                e.HasOne(x => x.TelegramGame).WithMany(x => x.TelegramGameTeams).HasForeignKey(x => x.TelegramGameId);
+                e.HasOne(x => x.TelegramGamePlayer).WithMany().HasForeignKey(x => x.TelegramGamePlayerId);
+            });
         }
 
         public DbSet<ServiceUser> ServiceUsers { get; set; }
         public DbSet<TelegramUser> TelegramUsers { get; set; }
+        public DbSet<TelegramUserScore> TelegramUserScores { get; set; }
         public DbSet<TelegramChatUser> TelegramChatUsers { get; set; }
         public DbSet<TelegramGame> TelegramGames { get; set; }
         public DbSet<TelegramGamePlayer> TelegramGamePlayers { get; set; }
+        public DbSet<TelegramGameTeam> TelegramGameTeams { get; set; }
     }
 }

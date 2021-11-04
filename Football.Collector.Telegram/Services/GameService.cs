@@ -76,7 +76,11 @@ namespace Football.Collector.Telegram.Services
             TelegramGame lastGame = null;
             if(args.TryGetValue("includeLastGamePlayers", out var includeLastGamePlayers) && includeLastGamePlayers == "true")
             {
-                lastGame = await apiService.FindLastTelegramGameAsync(new FindLastTelegramGameRequest { Date = request.Date });
+                lastGame = await apiService.FindLastTelegramGameAsync(new FindLastTelegramGameRequest 
+                { 
+                    Date = request.Date, 
+                    TelegramChatId = telegramChatUser.TelegramChatId 
+                });
             }
             
             var gameMessage = NewGameGenerateGameMessage(request, lastGame);
@@ -184,16 +188,6 @@ namespace Football.Collector.Telegram.Services
 
             var gameMessage = PlayersChangedGenerateGameMessage(telegramGame);
             var newMessage = await botClient.EditMessageTextAsync(message.Chat.Id, message.ReplyToMessage.MessageId, gameMessage, parseMode: ParseMode.Markdown);
-
-            try
-            {
-                await botClient.DeleteMessageAsync(message.Chat.Id, message.MessageId);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex.Message, ex);
-            }
-
             return newMessage;
         }
         public async Task<Message> DeleteGamePlayerAsync(Message message)
@@ -244,7 +238,7 @@ namespace Football.Collector.Telegram.Services
             {
                 var maxPlayersCount = GetMaxGamePlayersCount(telegramGame.TelegramGamePlayers.Count);
 
-                var gameUserList = telegramGame.TelegramGamePlayers.ToList();
+                var gameUserList = telegramGame.TelegramGamePlayers.OrderBy(x => x.CreatedAt).ToList();
                 var deletedUserIndex = gameUserList.IndexOf(telegramGamePlayer);
 
                 telegramGame.TelegramGamePlayers.Remove(telegramGamePlayer);
@@ -271,16 +265,6 @@ namespace Football.Collector.Telegram.Services
 
             var gameMessage = PlayersChangedGenerateGameMessage(telegramGame);
             var newMessage = await botClient.EditMessageTextAsync(message.Chat.Id, message.ReplyToMessage.MessageId, gameMessage, parseMode: ParseMode.Markdown);
-
-            try
-            {
-                await botClient.DeleteMessageAsync(message.Chat.Id, message.MessageId);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex.Message, ex);
-            }
-
             return newMessage;
         }
         public async Task<Message> AddNewChatUserAsync(Chat chat, User user)
