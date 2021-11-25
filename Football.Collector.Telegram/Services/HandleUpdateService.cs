@@ -76,8 +76,10 @@ namespace Football.Collector.Telegram.Services
             var action = message.Text.Split(' ').First() switch
             {
                "/new_game" => gameService.CreateGameAsync(message),
+                "/update_game" => gameService.UpdateGameAsync(message),
                 "+" => gameService.CreateGamePlayerAsync(message),
                 "-" => gameService.DeleteGamePlayerAsync(message),
+                //"/generate_team" => gameService.GenerateGameTeamsAsync(message),
                 _ => NoActionAsync(message)
             };
 

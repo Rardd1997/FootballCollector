@@ -1,4 +1,5 @@
-﻿using Football.Collector.Api.Interfaces;
+﻿using Football.Collector.Api.Extensions;
+using Football.Collector.Api.Interfaces;
 using Football.Collector.Common.Models;
 using Football.Collector.Data.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -153,7 +154,8 @@ namespace Football.Collector.Api.Controllers
                     Date = request.Date,
                     DurationInMins = request.DurationInMins,
                     ChatId = request.ChatId,
-                    MessageId = request.MessageId
+                    MessageId = request.MessageId,
+                    Notes = request.Notes
                 };
 
                 telegramGame = await gameRepository.CreateAsync(telegramGame);
@@ -168,6 +170,33 @@ namespace Football.Collector.Api.Controllers
             catch (Exception ex)
             {
                 logger.LogError(string.Format("Exception occured while creating a telegram game. Exception: {0}\n{1}", ex.Message, ex.StackTrace));
+                return StatusCode((int)HttpStatusCode.InternalServerError);
+            }
+        }
+        [HttpPut("telegram_game")]
+        public async Task<IActionResult> UpdateTelegramGameAsync(UpdateTelegramGameRequest request)
+        {
+            if (request == null)
+            {
+                return BadRequest();
+            }
+
+            try
+            {
+                var telegramGame = await gameRepository.FindAsync(request.ChatId, request.MessageId);
+                if(telegramGame == null)
+                {
+                    return NotFound();
+                }
+
+                telegramGame.ApplyUpdateRequest(request);
+                
+                telegramGame = await gameRepository.UpdateAsync(telegramGame);
+                return Ok(telegramGame);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(string.Format("Exception occured while updating a telegram game. Exception: {0}\n{1}", ex.Message, ex.StackTrace));
                 return StatusCode((int)HttpStatusCode.InternalServerError);
             }
         }

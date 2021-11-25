@@ -7,9 +7,9 @@ namespace Football.Collector.Telegram.Extensions
 {
     public static class MessageExtensions
     {
-        public static IDictionary<string, string> ParseMessage(this Message message)
+        public static IDictionary<string, string> ParseMessage(this Message message, string command)
         {
-            var text = message.Text.Substring("/new_game ".Length);
+            var text = message.Text.Substring((command + " ").Length);
             var args = ListToDictionary(SplitCommandLine(text));
             return args;
         }

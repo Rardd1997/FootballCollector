@@ -10,11 +10,11 @@ namespace Football.Collector.Data.Models
         public int DurationInMins { get; set; }
         public string Address { get; set; }
         public double Cost { get; set; }
+        public string Notes { get; set; }
 
         public string ChatId { get; set; }
         public string MessageId { get; set; }
 
         public virtual ICollection<TelegramGamePlayer> TelegramGamePlayers { get; set; }
-        public virtual ICollection<TelegramGameTeam> TelegramGameTeams { get; set; }
     }
 }

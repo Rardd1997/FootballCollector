@@ -65,9 +65,9 @@ namespace Football.Collector.Telegram.Services
                 return null;
             }
 
-            var args = message.ParseMessage();
-            var request = CreateTelegramGameRequest(args);
-            if (request == null)
+            var args = message.ParseMessage("/new_game");
+            var request = new CreateTelegramGameRequest();
+            if (!request.InitFromArgs(args))
             {
                 logger.LogError($"Message {message.Text} cannot to convert to create game request");
                 return null;
@@ -110,6 +110,99 @@ namespace Football.Collector.Telegram.Services
                 logger.LogError(ex.Message, ex);
             }
 
+            return newMessage;
+        }
+        public async Task<Message> UpdateGameAsync(Message message)
+        {
+            try
+            {
+                await botClient.DeleteMessageAsync(message.Chat.Id, message.MessageId);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex.Message, ex);
+            }
+
+            await botClient.SendChatActionAsync(message.Chat.Id, ChatAction.Typing);
+
+            var chatId = message.Chat.Id;
+
+            var findTelegramGameRequest = new FindTelegramGameRequest
+            {
+                ChatId = chatId.ToString(),
+                MessageId = message.ReplyToMessage?.MessageId.ToString()
+            };
+
+            var telegramGame = await apiService.FindTelegramGameAsync(findTelegramGameRequest);
+            if (telegramGame == null)
+            {
+                logger.LogError($"Telegram game didn't found");
+                return null;
+            }
+
+            if (telegramGame.Date < DateTime.UtcNow)
+            {
+                logger.LogWarning($"Telegram game isn't active");
+                return null;
+            }
+
+            var telegramUser = await apiService.FindTelegramUserAsync(new FindTelegramUserRequest { TelegramId = message.From.Id.ToString() });
+            if (telegramUser == null)
+            {
+                telegramUser = await CreateTelegramUserAsync(message.From, chatId.ToString());
+                if (telegramUser == null)
+                {
+                    logger.LogError($"Telegram user '{message.From.FirstName}' not found");
+                    return null;
+                }
+            }
+
+            var telegramChatUser = await apiService.FindTelegramChatUserAsync(new FindTelegramChatUserRequest
+            {
+                TelegramChatId = chatId.ToString(),
+                TelegramUserId = telegramUser.Id
+            });
+
+            if (telegramChatUser == null)
+            {
+                var createChatUserRequest = new CreateTelegramChatUserRequest
+                {
+                    TelegramChatId = chatId.ToString(),
+                    TelegramUserId = telegramUser.Id,
+                    IsAdmin = await IsAdminAsync(chatId.ToString(), message.From.Id)
+                };
+
+                telegramChatUser = await apiService.CreateTelegramChatUserAsync(createChatUserRequest);
+            }
+
+            if (telegramChatUser == null || !telegramChatUser.IsAdmin)
+            {
+                logger.LogError($"Telegram user 'Id = {telegramUser.TelegramId}, Name = {telegramUser.FirstName} {telegramUser.LastName}' isn't admin in chat {message.Chat.Id}");
+                return null;
+            }
+
+            var args = message.ParseMessage("/update_game");
+            var request = new UpdateTelegramGameRequest()
+            {
+                ChatId = chatId.ToString(),
+                MessageId = message.ReplyToMessage?.MessageId.ToString()
+            };
+
+            if (!request.InitFromArgs(args))
+            {
+                logger.LogError($"Message {message.Text} cannot to convert to update game request");
+                return null;
+            }
+
+            telegramGame = await apiService.UpdateTelegramGameAsync(request);
+            if (telegramGame == null)
+            {
+                logger.LogError($"Telegram game didn't update");
+                return null;
+            }
+
+            var gameMessage = PlayersChangedGenerateGameMessage(telegramGame);
+            var newMessage = await botClient.EditMessageTextAsync(message.Chat.Id, message.ReplyToMessage.MessageId, gameMessage, parseMode: ParseMode.Markdown);
             return newMessage;
         }
         public async Task<Message> CreateGamePlayerAsync(Message message)
@@ -167,27 +260,37 @@ namespace Football.Collector.Telegram.Services
             telegramGamePlayer.TelegramUser = telegramUser;
             telegramGame.TelegramGamePlayers.Add(telegramGamePlayer);
 
+            var name = $"{telegramUser.FirstName} {telegramUser.LastName}";
             var maxPlayersCount = GetMaxGamePlayersCount(telegramGame.TelegramGamePlayers.Count);
             if (telegramGame.TelegramGamePlayers.Count > maxPlayersCount)
             {
-                var name = $"{telegramUser.FirstName} {telegramUser.LastName}";
-                await botClient.SendTextMessageAsync(message.Chat.Id, $"[{name}](tg://user?id={telegramUser.TelegramId}), додав тебе в чергу очікування", parseMode: ParseMode.Markdown);
+                await botClient.SendTextMessageAsync(message.Chat.Id, $"| [{name}](tg://user?id={telegramUser.TelegramId}) + | Додав в чергу очікування", parseMode: ParseMode.Markdown);
             }
             else
             {
                 var gamePlayersCount = maxPlayersCount - telegramGame.TelegramGamePlayers.Count;
                 if (gamePlayersCount > 0)
                 {
-                    await botClient.SendTextMessageAsync(message.Chat.Id, $"Продовжуємо набір! Для гри потрібно ще мінімум {maxPlayersCount - telegramGame.TelegramGamePlayers.Count} гравців");
+                    await botClient.SendTextMessageAsync(message.Chat.Id, $"| [{name}](tg://user?id={telegramUser.TelegramId}) + | Продовжуємо набір! Для гри потрібно ще мінімум *{maxPlayersCount - telegramGame.TelegramGamePlayers.Count}* гравців", parseMode: ParseMode.Markdown);
                 }
                 else
                 {
-                    await botClient.SendTextMessageAsync(message.Chat.Id, $"Гра відбудеться! Нас {maxPlayersCount}");
+                    await botClient.SendTextMessageAsync(message.Chat.Id, $"| [{name}](tg://user?id={telegramUser.TelegramId}) + | *Гра відбудеться! Нас {maxPlayersCount}*", parseMode: ParseMode.Markdown);
                 }
             }
 
             var gameMessage = PlayersChangedGenerateGameMessage(telegramGame);
             var newMessage = await botClient.EditMessageTextAsync(message.Chat.Id, message.ReplyToMessage.MessageId, gameMessage, parseMode: ParseMode.Markdown);
+
+            try
+            {
+                await botClient.DeleteMessageAsync(message.Chat.Id, message.MessageId);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex.Message, ex);
+            }
+
             return newMessage;
         }
         public async Task<Message> DeleteGamePlayerAsync(Message message)
@@ -244,27 +347,38 @@ namespace Football.Collector.Telegram.Services
                 telegramGame.TelegramGamePlayers.Remove(telegramGamePlayer);
                 gameUserList.Remove(telegramGamePlayer);
 
+                var name = $"{telegramGamePlayer.TelegramUser.FirstName} {telegramGamePlayer.TelegramUser.LastName}";
                 if (deletedUserIndex + 1 <= maxPlayersCount && telegramGame.TelegramGamePlayers.Count >= maxPlayersCount)
                 {
                     var newMainUser = gameUserList[maxPlayersCount - 1];
-                    var name = $"{newMainUser.TelegramUser.FirstName} {newMainUser.TelegramUser.LastName}";
-                    await botClient.SendTextMessageAsync(message.Chat.Id, $"[{name}](tg://user?id={newMainUser.TelegramUser.TelegramId}), ти у грі", parseMode: ParseMode.Markdown);
+                    var newUserName = $"{newMainUser.TelegramUser.FirstName} {newMainUser.TelegramUser.LastName}";
+                    await botClient.SendTextMessageAsync(message.Chat.Id, $"| [{name}](tg://user?id={telegramUser.TelegramId}) - | [{newUserName}](tg://user?id={newMainUser.TelegramUser.TelegramId}), ти у грі", parseMode: ParseMode.Markdown);
                 }
 
                 var newMaxPlayersCount = GetMaxGamePlayersCount(telegramGame.TelegramGamePlayers.Count);
                 var gamePlayersCount = newMaxPlayersCount - telegramGame.TelegramGamePlayers.Count;
                 if (gamePlayersCount > 0)
                 {
-                    await botClient.SendTextMessageAsync(message.Chat.Id, $"Продовжуємо набір! Для гри потрібно ще мінімум {newMaxPlayersCount - telegramGame.TelegramGamePlayers.Count} гравців");
+                    await botClient.SendTextMessageAsync(message.Chat.Id, $"| [{name}](tg://user?id={telegramUser.TelegramId}) - | Продовжуємо набір! Для гри потрібно ще мінімум *{newMaxPlayersCount - telegramGame.TelegramGamePlayers.Count}* гравців", parseMode: ParseMode.Markdown);
                 }
                 else if(newMaxPlayersCount < maxPlayersCount)
                 {
-                    await botClient.SendTextMessageAsync(message.Chat.Id, $"Гра відбудеться! Нас {newMaxPlayersCount}");
+                    await botClient.SendTextMessageAsync(message.Chat.Id, $"| [{name}](tg://user?id={telegramUser.TelegramId}) - | *Гра відбудеться! Нас {newMaxPlayersCount}*", parseMode: ParseMode.Markdown);
                 }
             }
 
             var gameMessage = PlayersChangedGenerateGameMessage(telegramGame);
             var newMessage = await botClient.EditMessageTextAsync(message.Chat.Id, message.ReplyToMessage.MessageId, gameMessage, parseMode: ParseMode.Markdown);
+
+            try
+            {
+                await botClient.DeleteMessageAsync(message.Chat.Id, message.MessageId);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex.Message, ex);
+            }
+
             return newMessage;
         }
         public async Task<Message> AddNewChatUserAsync(Chat chat, User user)
@@ -287,6 +401,52 @@ namespace Football.Collector.Telegram.Services
                 string.Format(Constants.ChatRulesFormat, $"[{user.FirstName} {user.LastName}](tg://user?id={user.Id})"),
                 parseMode: ParseMode.Markdown);
         }
+        //public async Task<Message> GenerateGameTeamsAsync(Message message)
+        //{
+        //    await botClient.SendChatActionAsync(message.Chat.Id, ChatAction.Typing);
+
+        //    var chatId = message.Chat.Id;
+
+        //    var request = new FindTelegramGameRequest
+        //    {
+        //        ChatId = chatId.ToString(),
+        //        MessageId = message.ReplyToMessage?.MessageId.ToString()
+        //    };
+
+        //    var telegramGame = await apiService.FindTelegramGameAsync(request);
+        //    if (telegramGame == null)
+        //    {
+        //        logger.LogError($"Telegram game didn't found");
+        //        return null;
+        //    }
+
+        //    if (telegramGame.Date < DateTime.UtcNow)
+        //    {
+        //        logger.LogWarning($"Telegram game isn't active");
+        //        return await botClient.SendTextMessageAsync(message.Chat.Id, $"Цю гру вже зіграли!", replyToMessageId: message.MessageId);
+        //    }
+
+        //    if (telegramGame.TelegramGamePlayers == null || telegramGame.TelegramGamePlayers.Count < 10)
+        //    {
+        //        logger.LogWarning($"Telegram game isn't full");
+        //        return await botClient.SendTextMessageAsync(message.Chat.Id, $"У команді менше 10 гравців!", replyToMessageId: message.MessageId);
+        //    }
+
+        //    var gameTeams = await CreateTelegramGameTeamsAsync(message.Chat.Id.ToString(), telegramGame.TelegramGamePlayers);
+        //    var gameTeamsMessage = GetTelegramGameTeamsMessage(gameTeams);
+        //    var newMessage = await botClient.SendTextMessageAsync(message.Chat.Id, gameTeamsMessage);
+
+        //    try
+        //    {
+        //        await botClient.DeleteMessageAsync(message.Chat.Id, message.MessageId);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        logger.LogError(ex.Message, ex);
+        //    }
+
+        //    return newMessage;
+        //}
 
         private async Task<TelegramUser> CreateTelegramUserAsync(User user, string chatId)
         {
@@ -326,26 +486,23 @@ namespace Football.Collector.Telegram.Services
         }
         private string NewGameGenerateGameMessage(CreateTelegramGameRequest request, TelegramGame lastGame)
         {
-            var gameUsers = new StringBuilder();
-            var reserveUsers = new StringBuilder();
+            StringBuilder gameUsers;
+            StringBuilder reserveUsers;
 
-            var counter = 0;
-            if (lastGame != null)
+            if(lastGame == null)
             {
-                var maxPlayersCount = GetMaxGamePlayersCount(lastGame.TelegramGamePlayers.Count);
+                gameUsers = new StringBuilder();
+                reserveUsers = new StringBuilder();
+            }
+            else
+            {
+                FillUsers(out gameUsers, out reserveUsers, lastGame.TelegramGamePlayers);
+            }
 
-                foreach (var player in lastGame.TelegramGamePlayers.OrderBy(x => x.CreatedAt))
-                {
-                    counter++;
-                    if (counter <= maxPlayersCount)
-                    {
-                        gameUsers.AppendLine($"{counter}. [{player.TelegramUser.FirstName} {player.TelegramUser.LastName}](tg://user?id={player.TelegramUser.TelegramId})");
-                    }
-                    else
-                    {
-                        reserveUsers.AppendLine($"{counter}. {player.TelegramUser.FirstName} {player.TelegramUser.LastName}");
-                    }
-                }
+            var address = request.Address;
+            if(!string.IsNullOrEmpty(request.Notes))
+            {
+                address += $" ({request.Notes})";
             }
 
             return string.Format(
@@ -353,21 +510,43 @@ namespace Football.Collector.Telegram.Services
                 request.Date,
                 request.DurationInMins,
                 request.Cost,
-                request.Address,
+                address,
                 gameUsers.ToString(),
                 reserveUsers.ToString());
         }
         private string PlayersChangedGenerateGameMessage(TelegramGame game)
         {
-            var gameUsers = new StringBuilder();
-            var reserveUsers = new StringBuilder();
+            StringBuilder gameUsers;
+            StringBuilder reserveUsers;
+
+            FillUsers(out gameUsers, out reserveUsers, game.TelegramGamePlayers);
+
+
+            var address = game.Address;
+            if (!string.IsNullOrEmpty(game.Notes))
+            {
+                address += $" ({game.Notes})";
+            }
+
+            return string.Format(
+                Constants.GameMessageFormat,
+                game.Date,
+                game.DurationInMins,
+                game.Cost,
+                address,
+                gameUsers.ToString(),
+                reserveUsers.ToString());
+        }
+        private void FillUsers(out StringBuilder gameUsers, out StringBuilder reserveUsers, ICollection<TelegramGamePlayer> telegramGamePlayers)
+        {
+            gameUsers = new StringBuilder();
+            reserveUsers = new StringBuilder();
 
             var counter = 0;
-            var maxPlayersCount = GetMaxGamePlayersCount(game.TelegramGamePlayers.Count);
-
+            var maxPlayersCount = GetMaxGamePlayersCount(telegramGamePlayers.Count);
             var userList = new List<TelegramGamePlayer>();
 
-            foreach (var player in game.TelegramGamePlayers.OrderBy(x => x.CreatedAt))
+            foreach (var player in telegramGamePlayers.OrderBy(x => x.CreatedAt))
             {
                 counter++;
 
@@ -389,18 +568,14 @@ namespace Football.Collector.Telegram.Services
                     reserveUsers.AppendLine($"{counter}. {name}");
                 }
             }
-
-            return string.Format(
-                Constants.GameMessageFormat,
-                game.Date,
-                game.DurationInMins,
-                game.Cost,
-                game.Address,
-                gameUsers.ToString(),
-                reserveUsers.ToString());
         }
         private int GetMaxGamePlayersCount(int playersCount)
         {
+            if (playersCount <= 10)
+            {
+                return 10;
+            }
+
             if (playersCount <= 12)
             {
                 return 12;
@@ -417,6 +592,30 @@ namespace Football.Collector.Telegram.Services
             }
 
             return 20;
+        }
+        private int GetMaxTeamsCount(int playersCount)
+        {
+            var maxPlayersCount = GetMaxGamePlayersCount(playersCount);
+            return maxPlayersCount switch
+            {
+                12 => 2,
+                15 => 3,
+                20 => 4,
+                _ => 2
+            };
+        }
+        private int GetPlayersPerTeamCount(int playersCount)
+        {
+            var maxPlayersCount = GetMaxGamePlayersCount(playersCount);
+            return maxPlayersCount switch
+            {
+                10 => 5,
+                12 => 6,
+                15 => 5,
+                18 => 6,
+                20 => 5,
+                _ => throw new ArgumentException("Wrong number of game players!")
+            };
         }
         private async Task<bool> IsAdminAsync(ChatId chatId, long userId)
         {
@@ -436,41 +635,57 @@ namespace Football.Collector.Telegram.Services
                 return false;
             }
         }
-        private CreateTelegramGameRequest CreateTelegramGameRequest(IDictionary<string, string> args)
-        {
-            var request = new CreateTelegramGameRequest();
-            foreach (var item in args)
-            {
-                switch (item.Key)
-                {
-                    case "address":
-                        request.Address = item.Value;
-                        break;
+        //private async Task<ICollection<TelegramGameTeam>> CreateTelegramGameTeamsAsync(string gameId, ICollection<TelegramGamePlayer> telegramGamePlayers)
+        //{
+        //    var availableTeamNames = new string[] { "A", "B", "C", "D" };
 
-                    case "cost":
-                        if (double.TryParse(item.Value, out var cost))
-                        {
-                            request.Cost = cost;
-                        }
-                        break;
+        //    var players = telegramGamePlayers.OrderByDescending(x => x.TelegramUser.TelegramUserScore.Score);
+        //    var maxPlayersCount = GetMaxGamePlayersCount(telegramGamePlayers.Count);
 
-                    case "date":
-                        if (DateTime.TryParse(item.Value, out var date))
-                        {
-                            request.Date = date;
-                        }
-                        break;
+        //    var gamePlayers = telegramGamePlayers
+        //        .OrderBy(x => x.CreatedAt)
+        //        .Take(maxPlayersCount)
+        //        .ToList();
 
-                    case "durationInMins":
-                        if (int.TryParse(item.Value, out var durationInMins))
-                        {
-                            request.DurationInMins = durationInMins;
-                        }
-                        break;
-                }
-            }
+        //    var maxTeamsCount = GetMaxTeamsCount(maxPlayersCount);
+        //    var playersPerTeams = GetPlayersPerTeamCount(maxPlayersCount);
 
-            return request;
-        }
+        //    var teams = new Dictionary<string, ICollection<TelegramGamePlayer>>();
+
+        //    for(int i = 0; i < maxTeamsCount; i++)
+        //    {
+        //        teams.Add(availableTeamNames[i], new List<TelegramGamePlayer>());
+        //    }
+
+        //    //var moreSkillPlayers = players.Take(telegramGamePlayers.Count / 2).ToList();
+        //    //var lessSkillPlayers = players.TakeLast(telegramGamePlayers.Count - moreSkillPlayers.Count).ToList();
+
+        //    //var moreSkillPlayersGroup = moreSkillPlayers.GroupBy(x => x.TelegramUser.TelegramUserScore.Score);
+        //    //var lessSkillPlayersGroup = lessSkillPlayers.GroupBy(x => x.TelegramUser.TelegramUserScore.Score);
+
+        //    var processedPlayers = 0;
+
+        //    while(processedPlayers <= maxPlayersCount)
+        //    {
+        //        var minScore = teams.Min(x => x.Value.Sum(y => y.TelegramUser.TelegramUserScore.Score));
+        //        var minTeamsScore = teams
+        //            .Where(x => x.Value.Count < playersPerTeams && x.Value.Sum(y => y.TelegramUser.TelegramUserScore.Score) <= minScore)
+        //            .ToList();
+
+        //        var minTeamIndex = new Random().Next(0, minTeamsScore.Count);
+
+        //        minTeamsScore[minTeamIndex].Value.Add(gamePlayers[processedPlayers]);
+        //        processedPlayers++;
+        //    }
+
+        //    //TODO: create telegram game team
+
+        //    return null;
+        //}
+        //private string GetTelegramGameTeamsMessage(ICollection<TelegramGameTeam> teams)
+        //{
+        //    return null;
+        //}
+         
     }
 }

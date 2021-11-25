@@ -7,6 +7,7 @@ namespace Football.Collector.Api.Interfaces
     public interface ITelegramGameRepository: IDisposable
     {
         Task<TelegramGame> CreateAsync(TelegramGame newTelegramGame);
+        Task<TelegramGame> UpdateAsync(TelegramGame telegramGame);
         Task DeleteAsync(string id);
         Task<TelegramGame> FindAsync(string id);
         Task<TelegramGame> FindAsync(string chatId, string messageId);

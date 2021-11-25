@@ -88,6 +88,19 @@ namespace Football.Collector.Telegram.Services
                 return null;
             }
         }
+        public async Task<TelegramGame> UpdateTelegramGameAsync(UpdateTelegramGameRequest request)
+        {
+            try
+            {
+                var result = await InvokeApiAsync(new Uri(new Uri(Startup.BotConfig.AppServiceApi), Constants.TelegramGamePath), HttpMethod.Put, CreateHttpContent(request));
+                return JsonConvert.DeserializeObject<TelegramGame>(result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex.ToString(), ex);
+                return null;
+            }
+        }
         public async Task<TelegramGame> FindLastTelegramGameAsync(FindLastTelegramGameRequest request)
         {
             try

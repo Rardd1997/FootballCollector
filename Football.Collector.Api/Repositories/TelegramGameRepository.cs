@@ -23,6 +23,13 @@ namespace Football.Collector.Api.Repositories
 
             return newTelegramGame;
         }
+        public async Task<TelegramGame> UpdateAsync(TelegramGame telegramGame)
+        {
+            context.TelegramGames.Update(telegramGame);
+            await context.SaveChangesAsync();
+
+            return await FindAsync(telegramGame.Id);
+        }
         public async Task DeleteAsync(string id)
         {
             var game = await FindAsync(id);

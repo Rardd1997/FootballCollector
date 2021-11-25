@@ -7,6 +7,7 @@ namespace Football.Collector.Telegram.Interfaces
     public interface IApiService
     {
         Task<TelegramGame> CreateTelegramGameAsync(CreateTelegramGameRequest request);
+        Task<TelegramGame> UpdateTelegramGameAsync(UpdateTelegramGameRequest request);
         Task<TelegramUser> FindTelegramUserAsync(FindTelegramUserRequest request);
         Task<TelegramGame> FindTelegramGameAsync(FindTelegramGameRequest request);
         Task<TelegramGame> FindLastTelegramGameAsync(FindLastTelegramGameRequest request);
