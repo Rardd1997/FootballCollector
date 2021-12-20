@@ -29,6 +29,7 @@ namespace Football.Collector.Telegram.Services
                     UpdateType.Message => HandleMessageUpdate(update.Message),
                     UpdateType.MyChatMember => OnChatMemberChanged(update.MyChatMember),
                     UpdateType.ChatMember => OnChatMemberChanged(update.ChatMember),
+                    UpdateType.CallbackQuery => HandleCallbackQuery(update.CallbackQuery),
                     _ => UnknownUpdateHandlerAsync(update)
                 };
 
@@ -45,6 +46,21 @@ namespace Football.Collector.Telegram.Services
             {
                 MessageType.ChatMembersAdded => OnChatMemberAdded(message.Chat, message.NewChatMembers),
                 MessageType.Text => OnTextMessageReceived(message),
+                _ => Task.CompletedTask
+            };
+        }
+        public Task HandleCallbackQuery(CallbackQuery callbackQuery)
+        {
+            logger.LogInformation($"Receive CallbackQuery: {callbackQuery.Data}");
+            if (string.IsNullOrEmpty(callbackQuery.Data))
+            {
+                return Task.CompletedTask;
+            }
+
+            return callbackQuery.Data switch
+            {
+                "+" => gameService.CreateGamePlayerAsync(callbackQuery.Message, callbackQuery.From),
+                "-" => gameService.DeleteGamePlayerAsync(callbackQuery.Message, callbackQuery.From),
                 _ => Task.CompletedTask
             };
         }
@@ -77,8 +93,8 @@ namespace Football.Collector.Telegram.Services
             {
                "/new_game" => gameService.CreateGameAsync(message),
                 "/update_game" => gameService.UpdateGameAsync(message),
-                "+" => gameService.CreateGamePlayerAsync(message),
-                "-" => gameService.DeleteGamePlayerAsync(message),
+                "+" => gameService.CreateGamePlayerAsync(message, message.From, message.ReplyToMessage),
+                "-" => gameService.DeleteGamePlayerAsync(message, message.From, message.ReplyToMessage),
                 //"/generate_team" => gameService.GenerateGameTeamsAsync(message),
                 _ => NoActionAsync(message)
             };

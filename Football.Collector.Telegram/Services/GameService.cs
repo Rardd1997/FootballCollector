@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using Telegram.Bot.Types.ReplyMarkups;
 
 namespace Football.Collector.Telegram.Services
 {
@@ -85,7 +86,7 @@ namespace Football.Collector.Telegram.Services
             
             var gameMessage = NewGameGenerateGameMessage(request, lastGame);
 
-            var newMessage = await botClient.SendTextMessageAsync(message.Chat.Id, gameMessage, parseMode: ParseMode.Markdown);
+            var newMessage = await botClient.SendTextMessageAsync(message.Chat.Id, gameMessage, parseMode: ParseMode.Markdown, replyMarkup: GetGameReplyMarkup());
 
             request.ChatId = newMessage.Chat.Id.ToString();
             request.MessageId = newMessage.MessageId.ToString();
@@ -202,10 +203,10 @@ namespace Football.Collector.Telegram.Services
             }
 
             var gameMessage = PlayersChangedGenerateGameMessage(telegramGame);
-            var newMessage = await botClient.EditMessageTextAsync(message.Chat.Id, message.ReplyToMessage.MessageId, gameMessage, parseMode: ParseMode.Markdown);
+            var newMessage = await botClient.EditMessageTextAsync(message.Chat.Id, message.ReplyToMessage.MessageId, gameMessage, parseMode: ParseMode.Markdown, replyMarkup: GetGameReplyMarkup());
             return newMessage;
         }
-        public async Task<Message> CreateGamePlayerAsync(Message message)
+        public async Task<Message> CreateGamePlayerAsync(Message message, User from, Message replyMessage = null)
         {
             await botClient.SendChatActionAsync(message.Chat.Id, ChatAction.Typing);
 
@@ -213,9 +214,17 @@ namespace Football.Collector.Telegram.Services
 
             var request = new FindTelegramGameRequest
             {
-                ChatId = chatId.ToString(),
-                MessageId = message.ReplyToMessage?.MessageId.ToString()
+                ChatId = chatId.ToString()
             };
+
+            if(replyMessage == null)
+            {
+                request.MessageId = message.MessageId.ToString();
+            }
+            else
+            {
+                request.MessageId = replyMessage.MessageId.ToString();
+            }
 
             var telegramGame = await apiService.FindTelegramGameAsync(request);
             if (telegramGame == null)
@@ -227,16 +236,22 @@ namespace Football.Collector.Telegram.Services
             if (telegramGame.Date < DateTime.UtcNow)
             {
                 logger.LogWarning($"Telegram game isn't active");
+
+                if (replyMessage == null)
+                {
+                    return null;
+                }
+
                 return await botClient.SendTextMessageAsync(message.Chat.Id, $"Почекай наступну гру, ця вже відбулась(", replyToMessageId: message.MessageId);
             }
 
-            var telegramUser = await apiService.FindTelegramUserAsync(new FindTelegramUserRequest { TelegramId = message.From.Id.ToString() });
+            var telegramUser = await apiService.FindTelegramUserAsync(new FindTelegramUserRequest { TelegramId = from.Id.ToString() });
             if (telegramUser == null)
             {
-                telegramUser = await CreateTelegramUserAsync(message.From, chatId.ToString());
+                telegramUser = await CreateTelegramUserAsync(from, chatId.ToString());
                 if (telegramUser == null)
                 {
-                    logger.LogError($"Telegram user '{message.From.FirstName}' not found");
+                    logger.LogError($"Telegram user '{from.FirstName}' not found");
                     return null;
                 }
             }
@@ -280,20 +295,32 @@ namespace Football.Collector.Telegram.Services
             }
 
             var gameMessage = PlayersChangedGenerateGameMessage(telegramGame);
-            var newMessage = await botClient.EditMessageTextAsync(message.Chat.Id, message.ReplyToMessage.MessageId, gameMessage, parseMode: ParseMode.Markdown);
 
-            try
+            Message newMessage;
+            if (replyMessage == null)
             {
-                await botClient.DeleteMessageAsync(message.Chat.Id, message.MessageId);
+                newMessage = await botClient.EditMessageTextAsync(message.Chat.Id, message.MessageId, gameMessage, parseMode: ParseMode.Markdown, replyMarkup: GetGameReplyMarkup());
             }
-            catch (Exception ex)
+            else
             {
-                logger.LogError(ex.Message, ex);
+                newMessage = await botClient.EditMessageTextAsync(message.Chat.Id, replyMessage.MessageId, gameMessage, parseMode: ParseMode.Markdown, replyMarkup: GetGameReplyMarkup());
             }
 
+            if (replyMessage != null)
+            {
+                try
+                {
+                    await botClient.DeleteMessageAsync(message.Chat.Id, message.MessageId);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex.Message, ex);
+                }
+            }
+            
             return newMessage;
         }
-        public async Task<Message> DeleteGamePlayerAsync(Message message)
+        public async Task<Message> DeleteGamePlayerAsync(Message message, User from, Message replyMessage = null)
         {
             await botClient.SendChatActionAsync(message.Chat.Id, ChatAction.Typing);
 
@@ -302,8 +329,16 @@ namespace Football.Collector.Telegram.Services
             var request = new FindTelegramGameRequest
             {
                 ChatId = chatId.ToString(),
-                MessageId = message.ReplyToMessage?.MessageId.ToString()
             };
+
+            if (replyMessage == null)
+            {
+                request.MessageId = message.MessageId.ToString();
+            }
+            else
+            {
+                request.MessageId = replyMessage.MessageId.ToString();
+            }
 
             var telegramGame = await apiService.FindTelegramGameAsync(request);
             if (telegramGame == null)
@@ -318,7 +353,7 @@ namespace Football.Collector.Telegram.Services
                 return null;
             }
 
-            var telegramUser = await apiService.FindTelegramUserAsync(new FindTelegramUserRequest { TelegramId = message.From.Id.ToString() });
+            var telegramUser = await apiService.FindTelegramUserAsync(new FindTelegramUserRequest { TelegramId = from.Id.ToString() });
             if (telegramUser == null)
             {
                 logger.LogError($"Telegram user didn't found");
@@ -368,15 +403,27 @@ namespace Football.Collector.Telegram.Services
             }
 
             var gameMessage = PlayersChangedGenerateGameMessage(telegramGame);
-            var newMessage = await botClient.EditMessageTextAsync(message.Chat.Id, message.ReplyToMessage.MessageId, gameMessage, parseMode: ParseMode.Markdown);
 
-            try
+            Message newMessage;
+            if (replyMessage == null)
             {
-                await botClient.DeleteMessageAsync(message.Chat.Id, message.MessageId);
+                newMessage = await botClient.EditMessageTextAsync(message.Chat.Id, message.MessageId, gameMessage, parseMode: ParseMode.Markdown, replyMarkup: GetGameReplyMarkup());
             }
-            catch (Exception ex)
+            else
             {
-                logger.LogError(ex.Message, ex);
+                newMessage = await botClient.EditMessageTextAsync(message.Chat.Id, replyMessage.MessageId, gameMessage, parseMode: ParseMode.Markdown, replyMarkup: GetGameReplyMarkup());
+            }
+            
+            if (replyMessage != null)
+            {
+                try
+                {
+                    await botClient.DeleteMessageAsync(message.Chat.Id, message.MessageId);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex.Message, ex);
+                }
             }
 
             return newMessage;
@@ -448,6 +495,14 @@ namespace Football.Collector.Telegram.Services
         //    return newMessage;
         //}
 
+        private InlineKeyboardMarkup GetGameReplyMarkup() => new InlineKeyboardMarkup(new[]
+        {
+            new[]
+            {
+                InlineKeyboardButton.WithCallbackData("+"),
+                InlineKeyboardButton.WithCallbackData("-")
+            }
+        });
         private async Task<TelegramUser> CreateTelegramUserAsync(User user, string chatId)
         {
             var request = new CreateTelegramUserRequest
