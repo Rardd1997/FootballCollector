@@ -6,10 +6,15 @@ namespace Football.Collector.Telegram.Interfaces
     public interface IGameService
     {
         Task<Message> CreateGameAsync(Message message);
+
         Task<Message> UpdateGameAsync(Message message);
+
         Task<Message> CreateGamePlayerAsync(Message message, User from, Message replyMessage = null);
+
         Task<Message> DeleteGamePlayerAsync(Message message, User from, Message replyMessage = null);
+
         Task<Message> AddNewChatUserAsync(Chat chat, User user);
-        //Task<Message> GenerateGameTeamsAsync(Message message);
+
+        Task<Message> GetHelpAsync(Message message);
     }
 }

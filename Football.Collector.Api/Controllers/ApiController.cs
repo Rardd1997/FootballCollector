@@ -123,7 +123,6 @@ namespace Football.Collector.Api.Controllers
             }
         }
 
-
         //Telegram Game API
 
         [HttpPost("telegram_game")]
@@ -155,7 +154,9 @@ namespace Football.Collector.Api.Controllers
                     DurationInMins = request.DurationInMins,
                     ChatId = request.ChatId,
                     MessageId = request.MessageId,
-                    Notes = request.Notes
+                    HasShower = request.HasShower,
+                    HasChangingRoom = request.HasChangingRoom,
+                    HasParking = request.HasParking
                 };
 
                 telegramGame = await gameRepository.CreateAsync(telegramGame);
@@ -173,6 +174,7 @@ namespace Football.Collector.Api.Controllers
                 return StatusCode((int)HttpStatusCode.InternalServerError);
             }
         }
+
         [HttpPut("telegram_game")]
         public async Task<IActionResult> UpdateTelegramGameAsync(UpdateTelegramGameRequest request)
         {
@@ -184,13 +186,13 @@ namespace Football.Collector.Api.Controllers
             try
             {
                 var telegramGame = await gameRepository.FindAsync(request.ChatId, request.MessageId);
-                if(telegramGame == null)
+                if (telegramGame == null)
                 {
                     return NotFound();
                 }
 
                 telegramGame.ApplyUpdateRequest(request);
-                
+
                 telegramGame = await gameRepository.UpdateAsync(telegramGame);
                 return Ok(telegramGame);
             }

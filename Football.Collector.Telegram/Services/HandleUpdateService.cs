@@ -40,6 +40,7 @@ namespace Football.Collector.Telegram.Services
                 await HandleErrorAsync(exception);
             }
         }
+
         public Task HandleMessageUpdate(Message message)
         {
             return message.Type switch
@@ -49,6 +50,7 @@ namespace Football.Collector.Telegram.Services
                 _ => Task.CompletedTask
             };
         }
+
         public Task HandleCallbackQuery(CallbackQuery callbackQuery)
         {
             logger.LogInformation($"Receive CallbackQuery: {callbackQuery.Data}");
@@ -64,6 +66,7 @@ namespace Football.Collector.Telegram.Services
                 _ => Task.CompletedTask
             };
         }
+
         public Task HandleErrorAsync(Exception exception)
         {
             var ErrorMessage = exception switch
@@ -81,6 +84,7 @@ namespace Football.Collector.Telegram.Services
             logger.LogInformation($"Unknown update type: {update.Type}");
             return Task.CompletedTask;
         }
+
         private async Task OnTextMessageReceived(Message message)
         {
             logger.LogInformation($"Receive message type: {message.Type}");
@@ -91,21 +95,22 @@ namespace Football.Collector.Telegram.Services
 
             var action = message.Text.Split(' ').First() switch
             {
-               "/new_game" => gameService.CreateGameAsync(message),
+                "/new_game" => gameService.CreateGameAsync(message),
                 "/update_game" => gameService.UpdateGameAsync(message),
                 "+" => gameService.CreateGamePlayerAsync(message, message.From, message.ReplyToMessage),
                 "-" => gameService.DeleteGamePlayerAsync(message, message.From, message.ReplyToMessage),
-                //"/generate_team" => gameService.GenerateGameTeamsAsync(message),
+                "/help" => gameService.GetHelpAsync(message),
                 _ => NoActionAsync(message)
             };
 
             var sentMessage = await action;
 
-            if(sentMessage != null && sentMessage.MessageId != 0)
+            if (sentMessage != null && sentMessage.MessageId != 0)
             {
                 logger.LogInformation($"The message was sent with id: {sentMessage.MessageId}");
             }
         }
+
         private async Task OnChatMemberAdded(Chat chat, params User[] newUsers)
         {
             foreach (var newUser in newUsers)
@@ -125,11 +130,12 @@ namespace Football.Collector.Telegram.Services
                 }
             }
         }
+
         private async Task OnChatMemberChanged(ChatMemberUpdated chatMemberUpdated)
         {
             logger.LogInformation($"Receive chat member update. Old status: {chatMemberUpdated.OldChatMember.Status}, New Status: {chatMemberUpdated.NewChatMember.Status}");
-            
-            if(chatMemberUpdated.NewChatMember.Status == ChatMemberStatus.Kicked)
+
+            if (chatMemberUpdated.NewChatMember.Status == ChatMemberStatus.Kicked)
             {
                 logger.LogInformation($"User {chatMemberUpdated.NewChatMember.User.Username} kicked from chat {chatMemberUpdated.Chat.Id}");
                 return;
@@ -137,7 +143,7 @@ namespace Football.Collector.Telegram.Services
 
             if (chatMemberUpdated.NewChatMember.Status == ChatMemberStatus.Member)
             {
-                var sentMessage =  await gameService.AddNewChatUserAsync(chatMemberUpdated.Chat, chatMemberUpdated.NewChatMember.User);
+                var sentMessage = await gameService.AddNewChatUserAsync(chatMemberUpdated.Chat, chatMemberUpdated.NewChatMember.User);
                 if (sentMessage != null && sentMessage.MessageId != 0)
                 {
                     logger.LogInformation($"The message was sent with id: {sentMessage.MessageId}");
@@ -156,7 +162,7 @@ namespace Football.Collector.Telegram.Services
             }
         }
 
-        static Task<Message> NoActionAsync(Message message)
+        private static Task<Message> NoActionAsync(Message message)
         {
             return Task.FromResult(new Message());
         }

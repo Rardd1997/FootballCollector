@@ -7,12 +7,12 @@ namespace Football.Collector.Api.Extensions
     {
         public static void ApplyUpdateRequest(this TelegramGame @this, UpdateTelegramGameRequest request)
         {
-            if(@this == null || request == null)
+            if (@this == null || request == null)
             {
                 return;
             }
 
-            if(!string.IsNullOrEmpty(request.Address))
+            if (!string.IsNullOrEmpty(request.Address))
             {
                 @this.Address = request.Address;
             }
@@ -27,15 +27,15 @@ namespace Football.Collector.Api.Extensions
                 @this.Date = request.Date;
             }
 
-            if (!string.IsNullOrEmpty(request.Notes))
-            {
-                @this.Notes = request.Notes;
-            }
-
             if (request.DurationInMins > 0)
             {
                 @this.DurationInMins = request.DurationInMins;
             }
+
+            @this.HasShower = request.HasShower;
+            @this.HasChangingRoom = request.HasChangingRoom;
+            @this.HasParking = request.HasParking;
+            @this.Type = request.Type;
         }
     }
 }

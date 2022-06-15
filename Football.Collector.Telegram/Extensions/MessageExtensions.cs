@@ -13,6 +13,7 @@ namespace Football.Collector.Telegram.Extensions
             var args = ListToDictionary(SplitCommandLine(text));
             return args;
         }
+
         private static Dictionary<T, T> ListToDictionary<T>(IEnumerable<T> a)
         {
             var keys = a.Where((s, i) => i % 2 == 0);
@@ -21,6 +22,7 @@ namespace Football.Collector.Telegram.Extensions
                 .Zip(values, (k, v) => new KeyValuePair<T, T>(k, v))
                 .ToDictionary(kv => kv.Key, kv => kv.Value);
         }
+
         private static IEnumerable<string> SplitCommandLine(string commandLine)
         {
             bool inQuotes = false;
@@ -37,6 +39,7 @@ namespace Football.Collector.Telegram.Extensions
                 .Select(arg => arg.Trim().TrimMatchingQuotes('\"'))
                 .Where(arg => !string.IsNullOrEmpty(arg));
         }
+
         private static IEnumerable<string> Split(this string str, Func<char, bool> controller)
         {
             int nextPiece = 0;
@@ -52,6 +55,7 @@ namespace Football.Collector.Telegram.Extensions
 
             yield return str.Substring(nextPiece);
         }
+
         private static string TrimMatchingQuotes(this string input, char quote)
         {
             if ((input.Length >= 2) &&

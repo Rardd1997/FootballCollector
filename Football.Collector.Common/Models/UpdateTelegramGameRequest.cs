@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Football.Collector.Data.Enums;
+using System;
 
 namespace Football.Collector.Common.Models
 {
@@ -8,6 +9,9 @@ namespace Football.Collector.Common.Models
         public int DurationInMins { get; set; }
         public string Address { get; set; }
         public double Cost { get; set; }
-        public string Notes { get; set; }
+        public bool HasShower { get; set; }
+        public bool HasChangingRoom { get; set; }
+        public bool HasParking { get; set; }
+        public TelegramGameType Type { get; set; }
     }
 }
